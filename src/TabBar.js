@@ -131,14 +131,6 @@ export default class TabBar extends PureComponent<DefaultProps, Props, State> {
   };
 
   componentWillMount() {
-    if (typeof this.props.tabWidth !== 'undefined') {
-      console.warn('`tabWidth` prop is not supported. Set `width` in `tabStyle` instead.');
-    }
-
-    if (typeof this.props.activeOpacity !== 'undefined') {
-      console.warn('`activeOpacity` prop is not supported. Pass `pressOpacity` instead.');
-    }
-
     if (this.props.scrollEnabled === true) {
       const tabWidth = this._getTabWidthFromStyle(this.props.tabStyle);
       if (this.props.layout.width || tabWidth) {
@@ -151,7 +143,8 @@ export default class TabBar extends PureComponent<DefaultProps, Props, State> {
 
   componentDidMount() {
     this._adjustScroll(this.props.navigationState.index);
-    this._positionListener = this.props.subscribe('position', this._adjustScroll);
+    // TODO: Figure out a way to listen to position
+    // this._positionListener = this.props.position.addListener(e => this._adjustScroll(e.value));
   }
 
   componentWillReceiveProps(nextProps: Props) {
@@ -178,7 +171,7 @@ export default class TabBar extends PureComponent<DefaultProps, Props, State> {
   }
 
   componentWillUnmount() {
-    this._positionListener.remove();
+    // this._positionListener.remove();
   }
 
   _positionListener: Object;

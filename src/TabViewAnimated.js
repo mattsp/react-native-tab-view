@@ -2,13 +2,14 @@
 
 import React, { PureComponent, PropTypes } from 'react';
 import {
+  Animated,
   Platform,
-  View,
   StyleSheet,
+  View,
 } from 'react-native';
 import TabViewTransitioner from './TabViewTransitioner';
 import { NavigationStatePropType } from './TabViewPropTypes';
-import type { Scene, SceneRendererProps } from './TabViewTypeDefinitions';
+import type { Scene, SceneRendererProps, PagerProps } from './TabViewTypeDefinitions';
 import type { TransitionerProps } from './TabViewTransitionerTypes';
 
 const styles = StyleSheet.create({
@@ -19,11 +20,11 @@ const styles = StyleSheet.create({
 });
 
 type DefaultProps = {
-  renderPager: (props: SceneRendererProps) => React.Element<*>;
+  renderPager: (props: PagerProps) => React.Element<*>;
 }
 
 type Props = TransitionerProps & {
-  renderPager: (props: SceneRendererProps) => React.Element<*>;
+  renderPager: (props: PagerProps) => React.Element<*>;
   renderScene: (props: SceneRendererProps & Scene) => ?React.Element<*>;
   renderHeader?: (props: SceneRendererProps) => ?React.Element<*>;
   renderFooter?: (props: SceneRendererProps) => ?React.Element<*>;
@@ -56,12 +57,11 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
     renderHeader: PropTypes.func,
     renderFooter: PropTypes.func,
     onChangePosition: PropTypes.func,
-    shouldOptimizeUpdates: PropTypes.bool,
     lazy: PropTypes.bool,
   };
 
   static defaultProps = {
-    renderPager: (props: SceneRendererProps) => <TabViewPager {...props} />,
+    renderPager: (props: PagerProps) => <TabViewPager {...props} />,
   };
 
   constructor(props: Props) {
@@ -73,6 +73,19 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
   }
 
   state: State;
+
+  componentWillMount() {
+    const pager = this.props.renderPager({
+      layout: { height: 0, width: 0, measured: false },
+      navigationState: this.props.navigationState,
+      progress: new Animated.Value(0),
+      offset: new Animated.Value(this.props.navigationState.index),
+      jumpToIndex: () => {},
+    });
+    this._normalize = pager.type.normalize;
+  }
+
+  _normalize: (props: PagerProps) => Animated.Value;
 
   _renderScene = (props: SceneRendererProps & Scene) => {
     const { renderScene, navigationState, lazy } = this.props;
@@ -86,20 +99,24 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
     return renderScene(props);
   };
 
-  _renderItems = (props: SceneRendererProps) => {
+  _renderItems = (props: PagerProps) => {
     const { renderPager, renderHeader, renderFooter } = this.props;
     const { navigationState, layout } = props;
     const currentRoute = navigationState.routes[navigationState.index];
+    const sceneRendererProps = {
+      ...props,
+      position: this._normalize(props),
+    };
 
     return (
       <View style={styles.container}>
-        {renderHeader && renderHeader(props)}
+        {renderHeader && renderHeader(sceneRendererProps)}
         {renderPager({
           ...props,
           children: layout.width ? navigationState.routes.map((route, index) => (
             <View key={route.key} style={{ width: layout.width, overflow: 'hidden' }}>
               {this._renderScene({
-                ...props,
+                ...sceneRendererProps,
                 route,
                 index,
                 focused: index === props.navigationState.index,
@@ -108,7 +125,7 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
           )) : (
             <View key={currentRoute.key} style={styles.container}>
               {this._renderScene({
-                ...props,
+                ...sceneRendererProps,
                 route: currentRoute,
                 index: navigationState.index,
                 focused: true,
@@ -116,7 +133,7 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
             </View>
           ),
         })}
-        {renderFooter && renderFooter(props)}
+        {renderFooter && renderFooter(sceneRendererProps)}
       </View>
     );
   };

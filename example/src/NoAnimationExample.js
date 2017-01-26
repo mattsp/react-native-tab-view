@@ -82,7 +82,7 @@ export default class TopBarIconExample extends Component {
 
   _renderLabel = ({ position, navigationState }) => ({ route, index }) => {
     const inputRange = navigationState.routes.map((x, i) => i);
-    const outputRange = inputRange.map(inputIndex => inputIndex === index ? '#2196f3' : '#939393');
+    const outputRange = inputRange.map(i => i === index ? '#2196f3' : '#939393');
     const color = position.interpolate({
       inputRange,
       outputRange,
@@ -155,7 +155,13 @@ export default class TopBarIconExample extends Component {
   };
 
   _renderPager = (props) => {
-    return <TabViewPagerPan {...props} swipeEnabled={false} />;
+    return (
+      <TabViewPagerPan
+        {...props}
+        configureTransition={this._configureTransition}
+        swipeEnabled={false}
+      />
+    );
   };
 
   _configureTransition = () => null;
@@ -165,7 +171,6 @@ export default class TopBarIconExample extends Component {
       <TabViewAnimated
         style={[ styles.container, this.props.style ]}
         navigationState={this.state}
-        configureTransition={this._configureTransition}
         renderPager={this._renderPager}
         renderScene={this._renderScene}
         renderFooter={this._renderFooter}

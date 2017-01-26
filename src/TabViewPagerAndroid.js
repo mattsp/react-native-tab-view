@@ -2,11 +2,12 @@
 
 import React, { PureComponent, Children, PropTypes } from 'react';
 import {
-  ViewPagerAndroid,
+  Animated,
   StyleSheet,
+  ViewPagerAndroid,
 } from 'react-native';
-import { SceneRendererPropType } from './TabViewPropTypes';
-import type { SceneRendererProps } from './TabViewTypeDefinitions';
+import { PagerPropsPropType } from './TabViewPropTypes';
+import type { PagerProps } from './TabViewTypeDefinitions';
 
 type PageScrollEvent = {
   nativeEvent: {
@@ -23,7 +24,7 @@ const styles = StyleSheet.create({
   },
 });
 
-type Props = SceneRendererProps & {
+type Props = PagerProps & {
   swipeEnabled?: boolean;
   animationEnabled?: boolean;
   children?: any;
@@ -31,23 +32,22 @@ type Props = SceneRendererProps & {
 
 export default class TabViewPagerAndroid extends PureComponent<void, Props, void> {
   static propTypes = {
-    ...SceneRendererPropType,
+    ...PagerPropsPropType,
     swipeEnabled: PropTypes.bool,
     animationEnabled: PropTypes.bool,
     children: PropTypes.node,
   };
 
+  static normalize = (props: PagerProps) => Animated.add(props.progress, props.offset);
+
   componentWillMount() {
     this._currentIndex = this.props.navigationState.index;
-    this._jumpListener = this.props.subscribe('jump', this._handleJump);
   }
 
   componentWillReceiveProps(nextProps: Props) {
     if (this.props.layout !== nextProps.layout || Children.count(this.props.children) !== Children.count(nextProps.children)) {
       global.requestAnimationFrame(() => {
-        if (this._viewPager) {
-          this._viewPager.setPageWithoutAnimation(nextProps.navigationState.index);
-        }
+        this._setPage(nextProps.navigationState.index);
       });
     }
   }
@@ -58,13 +58,8 @@ export default class TabViewPagerAndroid extends PureComponent<void, Props, void
     }
   }
 
-  componentWillUnmount() {
-    this._jumpListener.remove();
-  }
-
   _jumpListener: Object;
   _viewPager: Object;
-  _isDrag: boolean = false;
   _isIdle: boolean = true;
   _currentIndex: number;
 
@@ -79,29 +74,14 @@ export default class TabViewPagerAndroid extends PureComponent<void, Props, void
     }
   }
 
-  _handleJump = (index: number) => {
-    if (this._isIdle) {
-      this._setPage(index);
-    }
-  };
-
-  _handlePageScroll = (e: PageScrollEvent) => {
-    if (this._isDrag) {
-      this.props.position.setValue(
-        e.nativeEvent.position + e.nativeEvent.offset
-      );
-    }
-  };
-
   _handlePageScrollStateChanged = (e: PageScrollState) => {
-    this._isIdle = e === 'idle';
-    if (e === 'dragging') {
-      this._isDrag = true;
-    } else if (e === 'idle') {
-      this._isDrag = false;
+    if (e === 'idle') {
+      this._isIdle = true;
       if (this._currentIndex !== this.props.navigationState.index) {
         this.props.jumpToIndex(this._currentIndex);
       }
+    } else {
+      this._isIdle = false;
     }
   };
 
@@ -118,7 +98,14 @@ export default class TabViewPagerAndroid extends PureComponent<void, Props, void
         keyboardDismissMode='on-drag'
         initialPage={this.props.navigationState.index}
         scrollEnabled={this.props.swipeEnabled !== false}
-        onPageScroll={this._handlePageScroll}
+        onPageScroll={Animated.event([ {
+          nativeEvent: {
+            position: this.props.progress,
+            offset: this.props.offset,
+          },
+        } ], {
+          useNativeDriver: true,
+        })}
         onPageScrollStateChanged={this._handlePageScrollStateChanged}
         onPageSelected={this._handlePageSelected}
         style={styles.container}
