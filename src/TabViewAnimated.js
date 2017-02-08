@@ -7,10 +7,15 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import TabViewTransitioner from './TabViewTransitioner';
 import { NavigationStatePropType } from './TabViewPropTypes';
-import type { Scene, SceneRendererProps, PagerProps } from './TabViewTypeDefinitions';
-import type { TransitionerProps } from './TabViewTransitionerTypes';
+import type {
+  Layout,
+  Scene,
+  Route,
+  NavigationState,
+  SceneRendererProps,
+  PagerProps,
+} from './TabViewTypeDefinitions';
 
 const styles = StyleSheet.create({
   container: {
@@ -23,15 +28,30 @@ type DefaultProps = {
   renderPager: (props: PagerProps) => React.Element<*>;
 }
 
-type Props = TransitionerProps & {
+type Props = {
+  navigationState: NavigationState;
+  onRequestChangeTab: (index: number) => void;
+  onChangePosition?: (value: number) => void;
+  initialLayout?: Layout;
+  canJumpToTab?: (route: Route) => boolean;
+  lazy?: boolean;
   renderPager: (props: PagerProps) => React.Element<*>;
   renderScene: (props: SceneRendererProps & Scene) => ?React.Element<*>;
   renderHeader?: (props: SceneRendererProps) => ?React.Element<*>;
   renderFooter?: (props: SceneRendererProps) => ?React.Element<*>;
-  lazy?: boolean;
 }
 
 type State = {
+  layout: Layout & {
+    measured: boolean;
+  };
+  animatedLayout: {
+    height: Animated.Value;
+    width: Animated.Value;
+  };
+  progress: Animated.Value;
+  offset: Animated.Value;
+  position: Animated.Value;
   loaded: Array<number>;
 }
 
@@ -52,40 +72,81 @@ default:
 export default class TabViewAnimated extends PureComponent<DefaultProps, Props, State> {
   static propTypes = {
     navigationState: NavigationStatePropType.isRequired,
+    initialLayout: PropTypes.shape({
+      height: PropTypes.number.isRequired,
+      width: PropTypes.number.isRequired,
+    }).isRequired,
+    onChangePosition: PropTypes.func,
+    canJumpToTab: PropTypes.func,
+    lazy: PropTypes.bool,
     renderPager: PropTypes.func.isRequired,
     renderScene: PropTypes.func.isRequired,
     renderHeader: PropTypes.func,
     renderFooter: PropTypes.func,
-    onChangePosition: PropTypes.func,
-    lazy: PropTypes.bool,
   };
 
   static defaultProps = {
+    initialLayout: {
+      height: 0,
+      width: 0,
+    },
     renderPager: (props: PagerProps) => <TabViewPager {...props} />,
   };
 
   constructor(props: Props) {
     super(props);
 
+    const layout = {
+      ...this.props.initialLayout,
+      measured: false,
+    };
+
+    const progress = new Animated.Value(0);
+    const offset = new Animated.Value(this.props.navigationState.index);
+    const height = new Animated.Value(layout.height || 0.0001);
+    const width = new Animated.Value(layout.width || 0.0001);
+
+    const pager = this.props.renderPager({
+      layout,
+      progress,
+      offset,
+      navigationState: this.props.navigationState,
+      jumpToIndex: () => {},
+    });
+
+    const position = pager.type.normalize({
+      progress,
+      offset,
+      width,
+    });
+
     this.state = {
+      layout,
+      animatedLayout: { height, width },
+      progress,
+      offset,
+      position,
       loaded: [ this.props.navigationState.index ],
     };
   }
 
   state: State;
 
-  componentWillMount() {
-    const pager = this.props.renderPager({
-      layout: { height: 0, width: 0, measured: false },
-      navigationState: this.props.navigationState,
-      progress: new Animated.Value(0),
-      offset: new Animated.Value(this.props.navigationState.index),
-      jumpToIndex: () => {},
-    });
-    this._normalize = pager.type.normalize;
+  componentDidMount() {
+    this.state.progress.addListener(this._trackPosition);
+    this.state.offset.addListener(this._trackPosition);
+    this.state.animatedLayout.width.addListener(this._trackPosition);
   }
 
-  _normalize: (props: PagerProps) => Animated.Value;
+  componentWillUnmount() {
+    this.state.progress.removeListener(this._trackPosition);
+    this.state.offset.removeListener(this._trackPosition);
+    this.state.animatedLayout.width.removeListener(this._trackPosition);
+  }
+
+  _trackPosition = () => {
+    this._handleChangePosition(this.state.position.__getValue());
+  }
 
   _renderScene = (props: SceneRendererProps & Scene) => {
     const { renderScene, navigationState, lazy } = this.props;
@@ -99,27 +160,25 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
     return renderScene(props);
   };
 
-  _renderItems = (props: PagerProps) => {
-    const { renderPager, renderHeader, renderFooter } = this.props;
-    const { navigationState, layout } = props;
+  _renderItems = () => {
+    const { renderPager, renderHeader, renderFooter, navigationState } = this.props;
+    const { layout } = this.state;
     const currentRoute = navigationState.routes[navigationState.index];
-    const sceneRendererProps = {
-      ...props,
-      position: this._normalize(props),
-    };
+    const pagerProps = this._buildPagerProps();
+    const sceneRendererProps = this._buildSceneRendererProps();
 
     return (
       <View style={styles.container}>
         {renderHeader && renderHeader(sceneRendererProps)}
         {renderPager({
-          ...props,
+          ...pagerProps,
           children: layout.width ? navigationState.routes.map((route, index) => (
             <View key={route.key} style={{ width: layout.width, overflow: 'hidden' }}>
               {this._renderScene({
                 ...sceneRendererProps,
                 route,
                 index,
-                focused: index === props.navigationState.index,
+                focused: index === navigationState.index,
               })}
             </View>
           )) : (
@@ -158,14 +217,68 @@ export default class TabViewAnimated extends PureComponent<DefaultProps, Props, 
     }
   };
 
+  _handleLayout = (e: any) => {
+    const { height, width } = e.nativeEvent.layout;
+
+    this.state.animatedLayout.height.setValue(height || 0.0001);
+    this.state.animatedLayout.width.setValue(width || 0.0001);
+
+    if (this.state.layout.width === width && this.state.layout.height === height) {
+      return;
+    }
+
+    this.setState({
+      layout: {
+        measured: true,
+        height,
+        width,
+      },
+    });
+  };
+
+  _buildPagerProps = (): PagerProps => {
+    return {
+      layout: this.state.layout,
+      progress: this.state.progress,
+      offset: this.state.offset,
+      navigationState: this.props.navigationState,
+      jumpToIndex: this._jumpToIndex,
+    };
+  };
+
+  _buildSceneRendererProps = (): SceneRendererProps => {
+    return {
+      layout: this.state.layout,
+      position: this.state.position,
+      navigationState: this.props.navigationState,
+      jumpToIndex: this._jumpToIndex,
+    };
+  };
+
+  _jumpToIndex = (index: number) => {
+    if (!this._mounted) {
+      // We are no longer mounted, this is a no-op
+      return;
+    }
+
+    const { canJumpToTab, navigationState } = this.props;
+
+    if (canJumpToTab && !canJumpToTab(navigationState.routes[index])) {
+      return;
+    }
+
+    this.props.onRequestChangeTab(index);
+  };
+
   render() {
     return (
-      <TabViewTransitioner
+      <View
         {...this.props}
         loaded={this.state.loaded}
-        onChangePosition={this._handleChangePosition}
-        render={this._renderItems}
-      />
+        onLayout={this._handleLayout}
+      >
+        {this._renderItems()}
+      </View>
     );
   }
 }

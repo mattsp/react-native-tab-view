@@ -7,7 +7,7 @@ import {
   ViewPagerAndroid,
 } from 'react-native';
 import { PagerPropsPropType } from './TabViewPropTypes';
-import type { PagerProps } from './TabViewTypeDefinitions';
+import type { PagerProps, PagerNormalizerProps } from './TabViewTypeDefinitions';
 
 type PageScrollEvent = {
   nativeEvent: {
@@ -38,7 +38,7 @@ export default class TabViewPagerAndroid extends PureComponent<void, Props, void
     children: PropTypes.node,
   };
 
-  static normalize = (props: PagerProps) => Animated.add(props.progress, props.offset);
+  static normalize = ({ progress, offset }: PagerNormalizerProps) => Animated.add(progress, offset);
 
   componentWillMount() {
     this._currentIndex = this.props.navigationState.index;

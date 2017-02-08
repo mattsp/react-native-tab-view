@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import TabViewStyleInterpolator from './TabViewStyleInterpolator';
 import { PagerPropsPropType } from './TabViewPropTypes';
-import type { PagerProps } from './TabViewTypeDefinitions';
+import type { PagerProps, PagerNormalizerProps } from './TabViewTypeDefinitions';
 import type { GestureEvent, GestureState } from './PanResponderTypes';
 
 const styles = StyleSheet.create({
@@ -69,7 +69,7 @@ export default class TabViewPagerPan extends PureComponent<DefaultProps, Props, 
     swipeVelocityThreshold: 0.25,
   };
 
-  static normalize = (props: PagerProps) => props.offset;
+  static normalize = ({ offset }: PagerNormalizerProps) => offset;
 
   componentWillMount() {
     this.props.offset.addListener(this._trackOffset);

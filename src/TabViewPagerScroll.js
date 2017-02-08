@@ -3,12 +3,11 @@
 import React, { PureComponent, Children, PropTypes } from 'react';
 import {
   Animated,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { PagerPropsPropType } from './TabViewPropTypes';
-import type { PagerProps } from './TabViewTypeDefinitions';
+import type { PagerProps, PagerNormalizerProps } from './TabViewTypeDefinitions';
 
 type ScrollEvent = {
   nativeEvent: {
@@ -41,12 +40,11 @@ export default class TabViewPagerScroll extends PureComponent<void, Props, void>
     children: PropTypes.node,
   };
 
-  static normalize = (props: PagerProps) => {
-    if (props.layout.width) {
-      return Animated.divide(props.progress, props.layout.width);
-    } else {
-      return new Animated.Value(props.navigationState.index);
-    }
+  static normalize = ({ progress, animatedLayout }: PagerNormalizerProps) => {
+    return Animated.divide(
+      progress,
+      animatedLayout.width,
+    );
   };
 
   componentDidMount() {
@@ -83,7 +81,7 @@ export default class TabViewPagerScroll extends PureComponent<void, Props, void>
     const { children } = this.props;
     const single = Children.count(children) === 1;
     return (
-      <ScrollView
+      <Animated.ScrollView
         horizontal
         pagingEnabled
         directionalLockEnabled
@@ -112,7 +110,7 @@ export default class TabViewPagerScroll extends PureComponent<void, Props, void>
         <View style={single ? styles.container : styles.row}>
           {children}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     );
   }
 }

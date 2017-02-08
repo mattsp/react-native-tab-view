@@ -34,6 +34,15 @@ export type PagerProps = {
   jumpToIndex: (index: number) => void;
 }
 
+export type PagerNormalizerProps = {
+  progress: Animated.Value;
+  offset: Animated.Value;
+  animatedLayout: {
+    height: Animated.Value;
+    width: Animated.Value;
+  };
+}
+
 export type SceneRendererProps = {
   layout: Layout & {
     measured: boolean;
